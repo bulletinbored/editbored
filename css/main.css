@@ -634,6 +634,80 @@ header {
 }
 
 /* ========================================
+   Preview Wrapper and Remove Button
+   ======================================== */
+.preview-wrapper {
+    position: relative;
+    margin: 1em 0;
+    display: block;
+}
+
+/* Allow cursor to move after wrapper */
+.preview-wrapper::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+.preview-remove-btn {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ff3b30;
+    border: 3px solid #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1 !important;
+    z-index: 9999 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.preview-remove-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: #fff;
+    stroke-width: 3;
+}
+
+.preview-remove-btn:hover {
+    background: #d63028;
+    transform: scale(1.15);
+}
+
+.preview-remove-btn:active {
+    transform: scale(0.95);
+}
+
+/* Ensure iframes don't cover the button */
+.link-preview__media iframe {
+    position: relative;
+    z-index: 1;
+}
+
+/* Instagram specific - override iframe positioning */
+.instagram-media {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+.instagram-media .preview-remove-btn {
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 1000 !important;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
    Markdown Source Panel
    ======================================== */
 .markdown-source {

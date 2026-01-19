@@ -8,11 +8,14 @@ A lightweight WYSIWYG Markdown editor with automatic link previews and embedded 
 - **Automatic Link Previews** - Paste links and get rich preview cards for:
   - YouTube and Vimeo videos
   - Twitter/X posts
-  - Facebook posts and videos
-  - Instagram posts
+  - Facebook posts, videos, and Reels
+  - Instagram posts and Reels
   - TikTok videos
   - Direct image URLs
   - Generic URLs with favicons
+- **Delete Button** - Remove any link preview with the X button
+- **Improved Cursor Management** - Seamless cursor positioning after embed previews
+- **@Mentions** - Type @ to see autocomplete suggestions for team members
 - **Markdown Toolbar** - Quick formatting buttons for common elements
 - **Keyboard Shortcuts** - Ctrl+B for bold, Ctrl+I for italic, Ctrl+S to save
 - **Auto-save** - Content is automatically saved to local storage
@@ -27,10 +30,10 @@ A modern web browser (Chrome, Firefox, Safari, Edge).
 
 ### Installation
 
-Simply open `markdown-editor.html` in your browser. No server or build process required.
+Open `index.html` in your browser. No server or build process required.
 
 ```
-open markdown-editor.html
+open index.html
 ```
 
 Or serve it with any static file server:
@@ -84,6 +87,14 @@ Type standard Markdown syntax in the editor. The content is rendered as formatte
 ![Image description](https://example.com/image.jpg)
 ```
 
+#### @Mentions
+
+Type `@` followed by a name to mention team members. Suggestions will appear automatically.
+
+```
+Hey @mario, can you review this?
+```
+
 #### Code Blocks
 
 ```markdown
@@ -115,13 +126,20 @@ function greet(name) {
 Paste a URL on its own line to automatically generate a preview card:
 
 - **YouTube**: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+- **YouTube Shorts**: `https://youtu.be/abc123`
 - **Twitter/X**: `https://twitter.com/user/status/1234567890`
 - **Vimeo**: `https://vimeo.com/123456789`
 - **Facebook**: `https://www.facebook.com/user/posts/123456789`
+- **Facebook Reels**: `https://www.facebook.com/reel/123456789`
 - **Instagram**: `https://www.instagram.com/p/abc123/`
+- **Instagram Reels**: `https://www.instagram.com/reel/abc123/`
 - **TikTok**: `https://www.tiktok.com/@user/video/1234567890`
 - **Images**: `https://example.com/image.png`
 - **Generic**: Any other URL becomes a card with favicon
+
+#### Deleting Previews
+
+Each link preview has a remove button (X) in the top-right corner. Click it to delete the preview and continue writing after it.
 
 ### Toolbar Reference
 
@@ -129,6 +147,7 @@ Paste a URL on its own line to automatically generate a preview card:
 |--------|--------|----------|
 | **B** | Bold | Ctrl+B |
 | *I* | Italic | Ctrl+I |
+| S | Strikethrough | |
 | • | Bullet List | - |
 | 1. | Numbered List | 1. |
 | 🔗 | Insert Link | |
@@ -136,6 +155,7 @@ Paste a URL on its own line to automatically generate a preview card:
 | `<>` | Inline Code | |
 | {} | Code Block | |
 | ❝ | Quote | |
+| @ | Mention | @ |
 
 ### Actions
 
@@ -149,31 +169,39 @@ Paste a URL on its own line to automatically generate a preview card:
 | Ctrl/Cmd + B | Bold |
 | Ctrl/Cmd + I | Italic |
 | Ctrl/Cmd + S | Save |
+| Tab | Insert 4 spaces (for code blocks) |
 
 ## Architecture
 
 ### Core Components
 
 - **Editor** - Contenteditable div with custom Markdown parsing
-- **Link Preview System** - Detects URLs and generates embed cards
+- **Link Preview System** - Detects URLs and generates embed cards with delete buttons
+- **Mention System** - Handles @autocomplete with custom user list
 - **Auto-save** - LocalStorage-based persistence
 - **Syntax Highlighting** - Highlight.js integration
 
 ### File Structure
 
 ```
-markdown-editor.html    # Main application (self-contained)
-LICENSE                 # MIT License
-README.md               # This file
+├── index.html           # Main HTML structure
+├── css/
+│   └── main.css         # All styling (editor, toolbar, previews)
+├── js/
+│   ├── app.js           # Main application logic
+│   └── vendor/
+│       └── mentions.js  # Mention/autocomplete system
+├── LICENSE              # MIT License
+└── README.md            # This file
 ```
 
 ### Technical Details
 
-- No build step required - single HTML file with embedded CSS and JavaScript
+- Modular structure with separate HTML, CSS, and JavaScript files
 - Uses browser native `contenteditable` for editing
 - Marked.js for Markdown parsing
 - Highlight.js for code syntax highlighting
-- Twitter Widget Script for tweet embeds
+- Platform-specific embed scripts (Twitter, Facebook, Instagram, TikTok)
 - No external dependencies (CDN only)
 
 ## Browser Support
