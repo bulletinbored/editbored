@@ -161,7 +161,7 @@ header {
 }
 
 .editor:empty::before {
-    content: 'Start writing in markdown...';
+    content: 'Start writing...';
     color: #aaa;
     font-style: italic;
     pointer-events: none;
