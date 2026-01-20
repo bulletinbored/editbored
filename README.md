@@ -1,4 +1,4 @@
-# editbored
+# editbored v1.0.0
 
 A lightweight WYSIWYG Markdown editor with automatic link previews and embedded media support.
 
@@ -6,11 +6,10 @@ A lightweight WYSIWYG Markdown editor with automatic link previews and embedded 
 
 - **WYSIWYG Editing** - Write in Markdown and see formatted output in real-time
 - **Automatic Link Previews** - Paste links and get rich preview cards for:
-  - YouTube and Vimeo videos
+  - YouTube videos
   - Twitter/X posts
   - Facebook posts, videos, and Reels
-  - Instagram posts and Reels
-  - TikTok videos
+  - Instagram posts
   - Direct image URLs
   - Generic URLs with favicons
 - **Delete Button** - Remove any link preview with the X button
@@ -128,14 +127,13 @@ Paste a URL on its own line to automatically generate a preview card:
 - **YouTube**: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
 - **YouTube Shorts**: `https://youtu.be/abc123`
 - **Twitter/X**: `https://twitter.com/user/status/1234567890`
-- **Vimeo**: `https://vimeo.com/123456789`
 - **Facebook**: `https://www.facebook.com/user/posts/123456789`
 - **Facebook Reels**: `https://www.facebook.com/reel/123456789`
 - **Instagram**: `https://www.instagram.com/p/abc123/`
-- **Instagram Reels**: `https://www.instagram.com/reel/abc123/`
-- **TikTok**: `https://www.tiktok.com/@user/video/1234567890`
 - **Images**: `https://example.com/image.png`
 - **Generic**: Any other URL becomes a card with favicon
+
+Note: Instagram Reels, TikTok, Threads, and Vimeo links are treated as generic links and will display a simple card with favicon instead of an embedded player.
 
 #### Deleting Previews
 
@@ -201,7 +199,7 @@ Each link preview has a remove button (X) in the top-right corner. Click it to d
 - Uses browser native `contenteditable` for editing
 - Marked.js for Markdown parsing
 - Highlight.js for code syntax highlighting
-- Platform-specific embed scripts (Twitter, Facebook, Instagram, TikTok)
+- Platform-specific embed scripts (Twitter, Facebook, Instagram)
 - No external dependencies (CDN only)
 
 ## Browser Support

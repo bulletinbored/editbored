@@ -1,4 +1,13 @@
 /* ========================================
+   editbored v1.0.0
+   A lightweight WYSIWYG Markdown editor with automatic link previews
+   https://github.com/mariograsso/editbored
+   ========================================
+*/
+
+const APP_VERSION = '1.0.0';
+
+/* ========================================
    Global function to update toolbar state
    ======================================== */
 function updateToolbarState() {
@@ -104,11 +113,6 @@ const editbored = (function() {
             getEmbedUrl: (match) => `https://www.youtube.com/embed/${match[1]}`,
             type: 'youtube-shorts'
         },
-        vimeo: {
-            regex: /vimeo\.com\/(\d+)/,
-            getEmbedUrl: (match) => `https://player.vimeo.com/video/${match[1]}`,
-            type: 'vimeo'
-        },
         twitter: {
             regex: /twitter\.com\/[a-zA-Z0-9_]+\/status\/(\d+)/,
             type: 'twitter',
@@ -120,31 +124,24 @@ const editbored = (function() {
             getEmbedUrl: (match) => `https://platform.twitter.com/widgets/tweet?id=${match[1]}`
         },
         facebook: {
-            regex: /https?:\/\/(?:www\.)?facebook\.com\/[a-zA-Z0-9_]+\/(posts|videos)\/([a-zA-Z0-9_-]+)/,
+            regex: /https?:\/\/(?:www\.|m\.|web\.)?facebook\.com\/(?:[a-zA-Z0-9.]+\/)?posts\/[a-zA-Z0-9_-]+/,
             type: 'facebook',
-            getEmbedUrl: (match) => {
-                const isVideo = match[1] === 'videos';
-                const urlPath = match[0];
-                if (isVideo) {
-                    return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(urlPath)}&width=500&height=280&show_text=false`;
-                }
-                return `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(urlPath)}&width=500&height=400`;
-            }
+            getEmbedUrl: (match) => match[0]
+        },
+        facebook_video: {
+            regex: /https?:\/\/(?:www\.|m\.|web\.)?facebook\.com\/(?:[a-zA-Z0-9.]+\/)?videos\/[a-zA-Z0-9_-]+/,
+            type: 'facebook-video',
+            getEmbedUrl: (match) => match[0]
         },
         facebook_reels: {
-            regex: /https?:\/\/(?:www\.)?facebook\.com\/reel\/([a-zA-Z0-9_-]+)/,
+            regex: /https?:\/\/(?:www\.|m\.|web\.)?facebook\.com\/reel\/[a-zA-Z0-9_-]+/,
             type: 'facebook-reels',
-            getEmbedUrl: (match) => `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(match[0])}&width=500&height=877&show_text=false`
+            getEmbedUrl: (match) => match[0]
         },
-        instagram: {
-            regex: /instagram\.com\/(p|reel)\/([a-zA-Z0-9_-]+)/,
+        instagram_post: {
+            regex: /https?:\/\/(?:www\.)?instagram\.com\/p\/[a-zA-Z0-9_-]+/,
             type: 'instagram',
-            getEmbedUrl: (match) => `https://www.instagram.com/${match[1]}/${match[2]}/embed`
-        },
-        tiktok: {
-            regex: /(?:tiktok\.com\/@[\w.]+\/video\/|vm\.tiktok\.com\/)([0-9]+)/,
-            type: 'tiktok',
-            getEmbedUrl: (match) => `https://www.tiktok.com/embed/${match[1]}`
+            getEmbedUrl: (match) => match[0]
         },
         image: {
             regex: /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i,
@@ -382,7 +379,7 @@ const editbored = (function() {
     }
 
     // Handle input changes
-    async function handleInput() {
+    const handleInput = async function() {
         updateWordCount();
         updateSourceCode();
 
@@ -406,7 +403,7 @@ const editbored = (function() {
     }
 
     // Convert raw URLs to embed previews
-    async function convertUrlsToEmbeds() {
+    const convertUrlsToEmbeds = async function() {
         const urlRegex = /https?:\/\/[^\s<>"']+/g;
         const textNodes = getTextNodes(editor);
 
@@ -416,58 +413,85 @@ const editbored = (function() {
 
             if (urls) {
                 for (const url of urls) {
-                    const trimmedText = text.trim();
+                    const urlWithoutSpace = url.trim();
+                    
+                    // Check for social media patterns to ensure URL is complete
+                    const socialMediaPatterns = [
+                        /instagram\.com\/[a-zA-Z0-9_.]+\/p\/[a-zA-Z0-9_-]+\/?$/i,
+                        /facebook\.com\/(?:[a-zA-Z0-9.]+\/)?(?:posts|videos|reel)\/[a-zA-Z0-9_-]+\/?$/i,
+                        /facebook\.com\/watch\/\?v=[a-zA-Z0-9_-]+$/i,
+                        /twitter\.com\/[a-zA-Z0-9_]+\/status\/\d+$/i,
+                        /x\.com\/[a-zA-Z0-9_]+\/status\/\d+$/i,
+                        /youtube\.com\/watch\?v=[a-zA-Z0-9_-]+$/i,
+                        /youtu\.be\/[a-zA-Z0-9_-]+$/i
+                    ];
 
-                    if (trimmedText === url) {
-                        const previewType = detectPreviewType(url);
-                        if (previewType) {
-                            // Check if it's an image - insert directly as img tag
-                            if (previewType.type === 'image') {
-                                const img = document.createElement('img');
-                                img.src = url;
-                                img.alt = url.split('/').pop();
-                                img.style.maxWidth = '100%';
-                                img.style.height = 'auto';
-                                img.style.display = 'block';
-                                img.style.margin = '10px 0';
-                                img.contentEditable = 'false';
-                                
-                                if (node.parentNode) {
-                                    const pBefore = document.createElement('p');
-                                    pBefore.innerHTML = '<br>';
-                                    const pAfter = document.createElement('p');
-                                    pAfter.innerHTML = '<br>';
-                                    
-                                    const fragment = document.createDocumentFragment();
-                                    fragment.appendChild(pBefore);
-                                    fragment.appendChild(img);
-                                    fragment.appendChild(pAfter);
-                                    
-                                    node.parentNode.replaceChild(fragment, node);
-                                    
-                                    // Position cursor after image
-                                    const range = document.createRange();
-                                    range.setStart(pAfter, 0);
-                                    range.collapse(true);
-                                    const selection = window.getSelection();
-                                    selection.removeAllRanges();
-                                    selection.addRange(range);
-                                }
-                            } else {
-                                // Create a temporary anchor element for other previews
-                                const linkElement = document.createElement("a");
-                                linkElement.href = url;
-                                linkElement.textContent = url;
-                                linkElement.target = "_blank";
-                                
-                                if (node.parentNode) {
-                                    node.parentNode.replaceChild(linkElement, node);
-                                    // Use createLinkPreview to create the preview
-                                    await createLinkPreview(linkElement, url, previewType);
-                                }
-                            }
-                            break;
+                    const isSocialMediaUrl = socialMediaPatterns.some(pattern => pattern.test(urlWithoutSpace));
+                    
+                    // For social media URLs, check minimum length AND ensure URL matches the full text content
+                    // This prevents premature triggering during typing
+                    if (isSocialMediaUrl) {
+                        // Check minimum length for social media URLs
+                        if (urlWithoutSpace.length < 25) {
+                            continue;
                         }
+                        
+                        const trimmedText = text.trim();
+                        const trimmedUrl = url.trim();
+                        
+                        if (trimmedText !== trimmedUrl) {
+                            continue;
+                        }
+                    }
+
+                    const previewType = detectPreviewType(urlWithoutSpace);
+                    if (previewType) {
+                        // Check if it's an image - insert directly as img tag
+                        if (previewType.type === 'image') {
+                            const img = document.createElement('img');
+                            img.src = urlWithoutSpace;
+                            img.alt = urlWithoutSpace.split('/').pop();
+                            img.style.maxWidth = '100%';
+                            img.style.height = 'auto';
+                            img.style.display = 'block';
+                            img.style.margin = '10px 0';
+                            img.contentEditable = 'false';
+                            
+                            if (node.parentNode) {
+                                const pBefore = document.createElement('p');
+                                pBefore.innerHTML = '<br>';
+                                const pAfter = document.createElement('p');
+                                pAfter.innerHTML = '<br>';
+                                
+                                const fragment = document.createDocumentFragment();
+                                fragment.appendChild(pBefore);
+                                fragment.appendChild(img);
+                                fragment.appendChild(pAfter);
+                                
+                                node.parentNode.replaceChild(fragment, node);
+                                
+                                // Position cursor after image
+                                const range = document.createRange();
+                                range.setStart(pAfter, 0);
+                                range.collapse(true);
+                                const selection = window.getSelection();
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            }
+                        } else {
+                            // Create a temporary anchor element for other previews
+                            const linkElement = document.createElement("a");
+                            linkElement.href = urlWithoutSpace;
+                            linkElement.textContent = urlWithoutSpace;
+                            linkElement.target = "_blank";
+                            
+                            if (node.parentNode) {
+                                node.parentNode.replaceChild(linkElement, node);
+                                // Use createLinkPreview to create the preview
+                                await createLinkPreview(linkElement, urlWithoutSpace, previewType);
+                            }
+                        }
+                        break;
                     }
                 }
             }
@@ -475,22 +499,21 @@ const editbored = (function() {
     }
 
     // Create link preview
-    window.createLinkPreview = async function(linkElement, url, previewType) {
-        const previewContent = window.generateEmbedHTML(url, previewType);
+    const createLinkPreview = async function(linkElement, url, previewType) {
+        const previewContent = await generateEmbedHTML(url, previewType);
         if (!previewContent) return;
 
         const previewId = 'preview-' + Date.now();
         
-        const isInstagram = previewType.type === 'instagram';
+        const isEmbedContent = ['instagram', 'facebook', 'facebook-video', 'facebook-reels'].includes(previewType.type);
         
         const wrapper = document.createElement('div');
         wrapper.className = 'preview-wrapper';
         wrapper.setAttribute('data-preview-id', previewId);
         
-        // For Instagram, we need contentEditable=true so that Instagram's embed.js can process the blockquote
-        // The blockquote itself will have contentEditable=false to prevent cursor issues
-        if (!isInstagram) {
-            wrapper.contentEditable = 'false'; // CRITICAL: prevents cursor from entering wrapper
+        // For embed content, we need contentEditable=true so that Meta's embed scripts can process
+        if (!isEmbedContent) {
+            wrapper.contentEditable = 'false';
         }
         
         const preview = document.createElement('div');
@@ -503,26 +526,22 @@ const editbored = (function() {
         removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
         removeBtn.title = 'Rimuovi link';
         removeBtn.setAttribute('aria-label', 'Rimuovi link');
-        removeBtn.contentEditable = 'false'; // Prevent button from capturing focus
+        removeBtn.contentEditable = 'false';
         removeBtn.addEventListener('mousedown', function(e) {
-            e.preventDefault(); // Prevent focus capture
+            e.preventDefault();
         });
         removeBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             const editor = document.getElementById('editor');
             
-            // Find the paragraph after wrapper for cursor position
             const nextSibling = wrapper.nextSibling;
             
-            // Remove the wrapper
             wrapper.remove();
             
-            // If there's a paragraph after, focus it
             if (nextSibling && (nextSibling.tagName === 'P' || nextSibling.tagName === 'DIV')) {
                 nextSibling.focus();
                 
-                // Position cursor at start of paragraph
                 const range = document.createRange();
                 range.setStart(nextSibling, 0);
                 range.collapse(true);
@@ -530,7 +549,6 @@ const editbored = (function() {
                 selection.removeAllRanges();
                 selection.addRange(range);
             } else {
-                // Create new paragraph if none exists
                 if (editor) {
                     const p = document.createElement('p');
                     p.innerHTML = '<br>';
@@ -556,8 +574,8 @@ const editbored = (function() {
         
         wrapper.appendChild(preview);
         
-        // For Instagram, add remove button inside the preview (since wrapper is editable)
-        if (isInstagram) {
+        // For embed content, add remove button inside the preview
+        if (isEmbedContent) {
             removeBtn.style.position = 'absolute';
             removeBtn.style.top = '4px';
             removeBtn.style.right = '4px';
@@ -577,22 +595,18 @@ const editbored = (function() {
         }
 
         if (linkElement.parentNode) {
-            // Create guard paragraphs for cursor management
             const pBefore = document.createElement('p');
             pBefore.innerHTML = '<br>';
             const pAfter = document.createElement('p');
             pAfter.innerHTML = '<br>';
             
-            // Create a fragment with guard rails
             const fragment = document.createDocumentFragment();
             fragment.appendChild(pBefore);
             fragment.appendChild(wrapper);
             fragment.appendChild(pAfter);
             
-            // Insert the fragment
             linkElement.parentNode.replaceChild(fragment, linkElement);
             
-            // Position cursor in the paragraph AFTER the wrapper
             setTimeout(() => {
                 pAfter.focus();
                 const range = document.createRange();
@@ -604,29 +618,47 @@ const editbored = (function() {
             }, 10);
         }
 
-        if (isInstagram) {
-            // For Instagram, trigger the embed script after insertion with a longer delay
-            // to ensure the DOM is ready
-            setTimeout(() => {
+        // Process embed content after insertion
+        // Instagram embeds
+        if (previewType.type === 'instagram') {
+            const processInstagram = (attempts = 0) => {
+                const maxAttempts = 10;
+                const interval = 300;
+
                 if (window.instgrm && window.instgrm.Embeds) {
                     window.instgrm.Embeds.process();
                     console.log('Instagram embed processed');
                 } else if (typeof instgrm !== 'undefined') {
                     instgrm.Embeds.process();
                     console.log('Instagram embed processed (fallback)');
+                } else if (attempts < maxAttempts) {
+                    console.log(`Instagram embed script not loaded yet, retry ${attempts + 1}/${maxAttempts}`);
+                    setTimeout(() => processInstagram(attempts + 1), interval);
                 } else {
-                    console.log('Instagram embed script not loaded yet');
+                    console.log('Instagram embed script failed to load after maximum retries');
                 }
-            }, 300);
+            };
+            setTimeout(() => processInstagram(), 500);
         }
 
-        window.linkPreviewCache = window.linkPreviewCache || new Map();
-        window.linkPreviewCache.set(previewId, { url, type: previewType.type });
+        // Facebook embeds - use XFBML parsing
+        if (previewType.type === 'facebook' || previewType.type === 'facebook-video' || previewType.type === 'facebook-reels') {
+            setTimeout(() => {
+                if (typeof FB !== 'undefined') {
+                    FB.XFBML.parse();
+                    console.log('Facebook embed processed');
+                } else {
+                    console.log('Facebook SDK not loaded yet');
+                }
+            }, 500);
+        }
+
+        linkPreviewCache = linkPreviewCache || new Map();
+        linkPreviewCache.set(previewId, { url, type: previewType.type });
     };
 
-    // Generate embed HTML
-    window.generateEmbedHTML = function(url, previewType) {
-        const domain = new URL(url).hostname;
+    // Generate embed HTML using official Meta embed formats
+    const generateEmbedHTML = async function(url, previewType) {
         
         if (previewType.type === 'youtube') {
             // Extract video ID from various YouTube URL formats
@@ -659,44 +691,66 @@ const editbored = (function() {
                 </div>`;
             }
         }
+        
         if (previewType.type === 'twitter') {
             const match = url.match(/(?:twitter|x)\.com\/[a-zA-Z0-9_]+\/status\/(\d+)/);
             const tweetId = match ? match[1] : '';
             return `<div class="link-preview link-preview--twitter"><a href="${url}" target="_blank"><iframe src="https://platform.twitter.com/embed/Tweet.html?id=${tweetId}" style="border:none;width:100%;height:350px;"></iframe></a></div>`;
         }
-        if (previewType.type === 'instagram') {
-            const isReel = url.includes('/reel/');
-            let instaId = null;
-            
-            if (isReel) {
-                const match = url.match(/instagram\.com\/reel\/([a-zA-Z0-9_-]+)/);
-                if (match) instaId = match[1];
-            } else {
-                const match = url.match(/instagram\.com\/p\/([a-zA-Z0-9_-]+)/);
-                if (match) instaId = match[1];
-            }
-            
-            if (instaId) {
-                // Use official Instagram blockquote format
-                return `<blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${url}" data-instgrm-version="14" style=" background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);"><div style="padding:16px;"><a href="${url}" style=" background:#FFFFFF; line-height:0; padding:0 0; text-align:center; text-decoration:none; width:100%;" target="_blank"><div style="display: flex; flex-direction: row; align-items: center;"><div style="background-color: #F4F4F4; border-radius: 50%; flex-grow: 0; height: 40px; margin-right: 14px; width: 40px;"></div><div style="display: flex; flex-direction: column; flex-grow: 1; justify-content: center;"><div style=" background-color: #F4F4F4; border-radius: 4px; flex-grow: 0; height: 14px; margin-bottom: 6px; width: 100px;"></div><div style=" background-color: #F4F4F4; border-radius: 4px; flex-grow: 0; height: 14px; width: 60px;"></div></div></div><div style="padding: 19% 0;"></div><div style="display:block; height:50px; margin:0 auto 12px; width:50px;"><svg width="50px" height="50px" viewBox="0 0 60 60" version="1.1" xmlns="https://www.w3.org/2000/svg"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g transform="translate(-511.000000, -20.000000)" fill="#000000"><g><path d="M556.869,30.41 C554.814,30.41 553.148,32.076 553.148,34.131 C553.148,36.186 554.814,37.852 556.869,37.852 C558.924,37.852 560.59,36.186 560.59,34.131 C560.59,32.076 558.924,30.41 556.869,30.41 M541,60.657 C535.114,60.657 530.342,55.887 530.342,50 C530.342,44.114 535.114,39.342 541,39.342 C546.887,39.342 551.658,44.114 551.658,50 C551.658,55.887 546.887,60.657 541,60.657 M541,33.886 C532.1,33.886 524.886,41.1 524.886,50 C524.886,58.899 532.1,66.113 541,66.113 C549.9,66.113 557.115,58.899 557.115,50 C557.115,41.1 549.9,33.886 541,33.886 M565.378,62.101 C565.244,65.022 564.756,66.606 564.346,67.663 C563.803,69.06 563.154,70.057 562.106,71.106 C561.058,72.155 560.06,72.803 558.662,73.347 C557.607,73.757 556.021,74.244 553.102,74.378 C549.944,74.521 548.997,74.552 541,74.552 C533.003,74.552 532.056,74.521 528.898,74.378 C525.979,74.244 524.393,73.757 523.338,73.347 C521.94,72.803 520.942,72.155 519.894,71.106 C518.846,70.057 518.197,69.06 517.654,67.663 C517.244,66.606 516.755,65.022 516.623,62.101 C516.479,58.943 516.448,57.996 516.448,50 C516.448,42.003 516.479,41.056 516.623,37.899 C516.755,34.978 517.244,33.391 517.654,32.338 C518.197,30.938 518.846,29.942 519.894,28.894 C520.942,27.846 521.94,27.196 523.338,26.654 C524.393,26.244 525.979,25.756 528.898,25.623 C532.057,25.479 533.004,25.448 541,25.448 C548.997,25.448 549.943,25.479 553.102,25.623 C556.021,25.756 557.607,26.244 558.662,26.654 C560.06,27.196 561.058,27.846 562.106,28.894 C563.154,29.942 563.803,30.938 564.346,32.338 C564.756,33.391 565.244,34.978 565.378,37.899 C565.522,41.056 565.552,42.003 565.552,50 C565.552,57.996 565.522,58.943 565.378,62.101"></path></g></g></g></svg></div><div style="padding-top: 8px;"><div style=" color:#3897f0; font-family:Arial,sans-serif; font-size:14px; font-style:normal; font-weight:550; line-height:18px;">Visualizza questo post su Instagram</div></div><div style="padding: 12.5% 0;"></div></a></div></blockquote>`;
-            }
-            // Fallback
-            return `<div class="link-preview"><a href="${url}" target="_blank">${url}</a></div>`;
+        
+        // Instagram posts and reels - use official blockquote
+        if (previewType.type === 'instagram' || previewType.type === 'instagram-reel') {
+            return `<div class="link-preview link-preview--instagram" style="min-height:500px;">
+                <blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${url}" data-instgrm-version="15" style=" background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
+                    <div style="padding:16px;">
+                        <a href="${url}" style=" background:#FFFFFF; line-height:0; padding:0 0; text-align:center; text-decoration:none; width:100%;" target="_blank">
+                            <div style="display: flex; flex-direction: row; align-items: center;">
+                                <div style="background-color: #F4F4F4; border-radius: 50%; flex-grow: 0; height: 40px; margin-right: 14px; width: 40px;"></div>
+                                <div style="display: flex; flex-direction: column; flex-grow: 1; justify-content: center;">
+                                    <div style=" background-color: #F4F4F4; border-radius: 4px; flex-grow: 0; height: 14px; margin-bottom: 6px; width: 100px;"></div>
+                                    <div style=" background-color: #F4F4F4; border-radius: 4px; flex-grow: 0; height: 14px; width: 60px;"></div>
+                                </div>
+                            </div>
+                            <div style="padding: 19% 0;"></div>
+                            <div style="display:block; height:50px; margin:0 auto 12px; width:50px;">
+                                <svg width="50px" height="50px" viewBox="0 0 60 60" version="1.1" xmlns="https://www.w3.org/2000/svg">
+                                    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+                                        <g transform="translate(-511.000000, -20.000000)" fill="#000000">
+                                            <g>
+                                                <path d="M556.869,30.41 C554.814,30.41 553.148,32.076 553.148,34.131 C553.148,36.186 554.814,37.852 556.869,37.852 C558.924,37.852 560.59,36.186 560.59,34.131 C560.59,32.076 558.924,30.41 556.869,30.41 M541,60.657 C535.114,60.657 530.342,55.887 530.342,50 C530.342,44.114 535.114,39.342 541,39.342 C546.887,39.342 551.658,44.114 551.658,50 C551.658,55.887 546.887,60.657 541,60.657 M541,33.886 C532.1,33.886 524.886,41.1 524.886,50 C524.886,58.899 532.1,66.113 541,66.113 C549.9,66.113 557.115,58.899 557.115,50 C557.115,41.1 549.9,33.886 541,33.886 M565.378,62.101 C565.244,65.022 564.756,66.606 564.346,67.663 C563.803,69.06 563.154,70.057 562.106,71.106 C561.058,72.155 560.06,72.803 558.662,73.347 C557.607,73.757 556.021,74.244 553.102,74.378 C549.944,74.521 548.997,74.552 541,74.552 C533.003,74.552 532.056,74.521 528.898,74.378 C525.979,74.244 524.393,73.757 523.338,73.347 C521.94,72.803 520.942,72.155 519.894,71.106 C518.846,70.057 518.197,69.06 517.654,67.663 C517.244,66.606 516.755,65.022 516.623,62.101 C516.479,58.943 516.448,57.996 516.448,50 C516.448,42.003 516.479,41.056 516.623,37.899 C516.755,34.978 517.244,33.391 517.654,32.338 C518.197,30.938 518.846,29.942 519.894,28.894 C520.942,27.846 521.94,27.196 523.338,26.654 C524.393,26.244 525.979,25.756 528.898,25.623 C532.057,25.479 533.004,25.448 541,25.448 C548.997,25.448 549.943,25.479 553.102,25.623 C556.021,25.756 557.607,26.244 558.662,26.654 C560.06,27.196 561.058,27.846 562.106,28.894 C563.154,29.942 563.803,30.938 564.346,32.338 C564.756,33.391 565.244,34.978 565.378,37.899 C565.522,41.056 565.552,42.003 565.552,50 C565.552,57.996 565.522,58.943 565.378,62.101"></path>
+                                            </g>
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div style="padding-top: 8px;">
+                                <div style=" color:#3897f0; font-family:Arial,sans-serif; font-size:14px; font-style:normal; font-weight:550; line-height:18px;">Visualizza questo post su Instagram</div>
+                            </div>
+                            <div style="padding: 12.5% 0;"></div>
+                        </a>
+                    </div>
+                </blockquote>
+            </div>`;
         }
+        
+        // Facebook posts - use XFBML format
         if (previewType.type === 'facebook') {
-            return `<div class="link-preview link-preview--facebook"><iframe src="https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(url)}&width=500&show_text=false" style="border:none;width:100%;height:400px;overflow:hidden;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe></div>`;
+            return `<div class="link-preview link-preview--facebook" style="min-height:400px;">
+                <div class="fb-post" data-href="${url}" data-width="540" data-show-text="false" data-lazy="true"></div>
+            </div>`;
         }
-        if (previewType.type === 'facebook-reels') {
-            return `<div class="link-preview link-preview--facebook-reels"><iframe src="https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&width=500&show_text=false" style="border:none;width:100%;height:600px;overflow:hidden;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe></div>`;
+        
+        // Facebook videos and reels - use XFBML format
+        if (previewType.type === 'facebook-video' || previewType.type === 'facebook-reels') {
+            return `<div class="link-preview link-preview--${previewType.type}" style="min-height:500px;">
+                <div class="fb-video" data-href="${url}" data-width="540" data-allowfullscreen="true" data-lazy="true"></div>
+            </div>`;
         }
-        if (previewType.type === 'tiktok') {
-            const match = url.match(/(?:tiktok\.com\/@[\w.]+\/video\/|vm\.tiktok\.com\/)([0-9]+)/);
-            const videoId = match ? match[1] : '';
-            return `<div class="link-preview link-preview--tiktok"><a href="${url}" target="_blank"><iframe src="https://www.tiktok.com/embed/${videoId}" style="border:none;width:100%;height:600px;"></iframe></a></div>`;
-        }
+        
         if (previewType.type === 'image') {
             return `<img src="${url}" alt="Image" style="max-width:100%;display:block;margin:10px 0;">`;
         }
+        
         if (previewType.type === 'generic') {
             try {
                 const urlObj = new URL(url);
@@ -720,50 +774,50 @@ const editbored = (function() {
                 return `<div class="link-preview"><a href="${url}" target="_blank">${url}</a></div>`;
             }
         }
+        
         return null;
     };
 
     // Preview type detection
-    window.previewTypes = {
+    const previewTypes = {
         youtube: { regex: /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/, type: 'youtube' },
         youtube_shorts: { regex: /(?:youtube\.com\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]+)/, type: 'youtube' },
         twitter: { regex: /(?:twitter|x)\.com\/[a-zA-Z0-9_]+\/status\/(\d+)/, type: 'twitter' },
         x: { regex: /x\.com\/[a-zA-Z0-9_]+\/status\/(\d+)/, type: 'twitter' },
-        instagram_post: { regex: /instagram\.com\/p\/([a-zA-Z0-9_-]+)/, type: 'instagram' },
-        instagram_reel: { regex: /instagram\.com\/reel\/([a-zA-Z0-9_-]+)/, type: 'instagram' },
-        facebook_post: { regex: /facebook\.com\/[a-zA-Z0-9_]+\/posts\/([a-zA-Z0-9_-]+)/, type: 'facebook' },
-        facebook_video: { regex: /facebook\.com\/[a-zA-Z0-9_]+\/videos\/([a-zA-Z0-9_-]+)/, type: 'facebook' },
-        facebook_reel: { regex: /facebook\.com\/reel\/([a-zA-Z0-9_-]+)/, type: 'facebook-reels' },
-        tiktok: { regex: /(?:tiktok\.com\/@[\w.]+\/video\/|vm\.tiktok\.com\/)([0-9]+)/, type: 'tiktok' },
+        instagram_post: { regex: /instagram\.com\/p\/[a-zA-Z0-9_-]+\/?/, type: 'instagram' },
+        facebook_post: { regex: /facebook\.com\/(?:[a-zA-Z0-9.]+\/)?posts\/[a-zA-Z0-9_-]+\/?/, type: 'facebook' },
+        facebook_video: { regex: /facebook\.com\/(?:[a-zA-Z0-9.]+\/)?videos\/[a-zA-Z0-9_-]+\/?/, type: 'facebook-video' },
+        facebook_watch: { regex: /facebook\.com\/watch\/\?v=/, type: 'facebook-video' },
+        facebook_reel: { regex: /facebook\.com\/reel\/[a-zA-Z0-9_-]+\/?/, type: 'facebook-reels' },
         image: { regex: /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i, type: 'image' },
         generic: { regex: /^https?:\/\/[^\s]+$/, type: 'generic' }
     };
 
-    window.detectPreviewType = function(url) {
+    function detectPreviewType(url) {
         // Check each preview type in order of specificity
+        // Note: Patterns don't use $ anchor because URLs may have trailing characters (like spaces)
         const checks = [
-            { key: 'instagram_reel', pattern: /instagram\.com\/reel\/([a-zA-Z0-9_-]+)/, type: 'instagram' },
-            { key: 'instagram_post', pattern: /instagram\.com\/p\/([a-zA-Z0-9_-]+)/, type: 'instagram' },
-            { key: 'facebook_reel', pattern: /facebook\.com\/reel\/([a-zA-Z0-9_-]+)/, type: 'facebook-reels' },
-            { key: 'facebook_video', pattern: /facebook\.com\/[a-zA-Z0-9_]+\/videos\/([a-zA-Z0-9_-]+)/, type: 'facebook' },
-            { key: 'facebook_post', pattern: /facebook\.com\/[a-zA-Z0-9_]+\/posts\/([a-zA-Z0-9_-]+)/, type: 'facebook' },
+            { key: 'instagram_post', pattern: /instagram\.com\/(?:[a-zA-Z0-9_.]+\/)?p\/[a-zA-Z0-9_-]+\/?/, type: 'instagram' },
+            { key: 'facebook_watch', pattern: /facebook\.com\/watch\/\?v=/, type: 'facebook-video' },
+            { key: 'facebook_reel', pattern: /facebook\.com\/reel\/[a-zA-Z0-9_-]+\/?/, type: 'facebook-reels' },
+            { key: 'facebook_video', pattern: /facebook\.com\/(?:[a-zA-Z0-9.]+\/)?videos\/[a-zA-Z0-9_-]+\/?/, type: 'facebook-video' },
+            { key: 'facebook_post', pattern: /facebook\.com\/(?:[a-zA-Z0-9.]+\/)?posts\/[a-zA-Z0-9_-]+\/?/, type: 'facebook' },
             { key: 'youtube_shorts', pattern: /(?:youtube\.com\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]+)/, type: 'youtube' },
             { key: 'youtube', pattern: /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/, type: 'youtube' },
             { key: 'twitter', pattern: /(?:twitter|x)\.com\/[a-zA-Z0-9_]+\/status\/(\d+)/, type: 'twitter' },
-            { key: 'tiktok', pattern: /(?:tiktok\.com\/@[\w.]+\/video\/|vm\.tiktok\.com\/)([0-9]+)/, type: 'tiktok' },
             { key: 'image', pattern: /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i, type: 'image' },
             { key: 'generic', pattern: /^https?:\/\/[^\s]+$/, type: 'generic' }
         ];
-        
+
         for (const check of checks) {
             if (check.pattern.test(url)) {
-                return window.previewTypes[check.key] || { type: check.type };
+                return previewTypes[check.key] || { type: check.type };
             }
         }
         return null;
     };
 
-    window.getTextNodes = function(element) {
+    function getTextNodes(element) {
         const textNodes = [];
         const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
         let node;
@@ -783,7 +837,6 @@ const editbored = (function() {
         if (e.key === 'Tab') {
             e.preventDefault();
             
-            // Check if we're in a code block (pre > code)
             const selection = window.getSelection();
             if (selection.rangeCount > 0) {
                 const range = selection.getRangeAt(0);
@@ -809,7 +862,6 @@ const editbored = (function() {
                 const blockquote = range.startContainer.parentElement.closest('blockquote');
                 
                 if (blockquote) {
-                    // Check if we're at the end of the blockquote
                     const blockquoteRange = document.createRange();
                     blockquoteRange.selectNodeContents(blockquote);
                     blockquoteRange.collapse(false);
@@ -817,14 +869,12 @@ const editbored = (function() {
                     if (range.collapsed && range.startContainer.textContent.length === range.startOffset) {
                         e.preventDefault();
                         
-                        // Exit blockquote
                         const p = document.createElement('p');
                         p.innerHTML = '<br>';
                         
                         if (blockquote.parentNode) {
                             blockquote.parentNode.insertBefore(p, blockquote.nextSibling);
                             
-                            // Move cursor to new paragraph
                             const newRange = document.createRange();
                             newRange.setStart(p, 0);
                             newRange.collapse(true);
@@ -844,27 +894,22 @@ const editbored = (function() {
                 const li = range.startContainer.parentElement.closest('li');
                 
                 if (li) {
-                    // Check if the list item is empty or just has a <br>
                     const textContent = li.textContent.trim();
                     
                     if (textContent === '' || textContent === '\n') {
                         e.preventDefault();
                         
-                        // Remove the list item
                         const ul = li.closest('ul, ol');
                         
                         if (ul && ul.parentNode) {
                             if (ul.children.length === 1) {
-                                // Remove the entire list
                                 const p = document.createElement('p');
                                 p.innerHTML = '<br>';
                                 ul.parentNode.replaceChild(p, ul);
                             } else {
-                                // Just remove this list item
                                 li.remove();
                             }
                             
-                            // Move cursor
                             const newRange = document.createRange();
                             newRange.setStart(ul.parentNode, ul.parentNode.childNodes.length === 0 ? 0 : Array.from(ul.parentNode.childNodes).indexOf(ul) + (ul.children.length > 0 ? 0 : 1));
                             newRange.collapse(true);
@@ -886,10 +931,8 @@ const editbored = (function() {
                 if (preEl) {
                     e.preventDefault();
                     
-                    // Get the text typed so far
                     const typedText = preEl.textContent;
                     
-                    // Create a paragraph with the text in code block format
                     const currentP = document.createElement('p');
                     const preNewEl = document.createElement('pre');
                     preNewEl.style.backgroundColor = '#282c34';
@@ -910,11 +953,9 @@ const editbored = (function() {
                     preNewEl.appendChild(codeNewEl);
                     currentP.appendChild(preNewEl);
                     
-                    // Create a new paragraph for the next line
                     const newP = document.createElement('p');
                     newP.innerHTML = '<br>';
                     
-                    // Insert both paragraphs
                     if (preEl.parentNode) {
                         preEl.parentNode.insertBefore(currentP, preEl);
                         if (preEl.nextSibling) {
@@ -924,10 +965,8 @@ const editbored = (function() {
                         }
                         preEl.remove();
                         
-                        // Focus the new paragraph
                         newP.focus();
                         
-                        // Position cursor at start
                         const newRange = document.createRange();
                         newRange.setStart(newP, 0);
                         newRange.collapse(true);
@@ -935,7 +974,6 @@ const editbored = (function() {
                         selection.addRange(newRange);
                     }
                     
-                    // Trigger input event
                     editor.dispatchEvent(new Event('input', { bubbles: true }));
                 }
             }
@@ -951,7 +989,6 @@ const editbored = (function() {
 
     // Handle blur
     function handleBlur() {
-        // Save when leaving editor
         if (options.autoSave) {
             scheduleAutoSave();
         }
@@ -1037,18 +1074,15 @@ const editbored = (function() {
 
     // Format text with given command
     function formatText(command, value = null) {
-        // First, try using queryCommandState to check current state
         const states = ['bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript'];
         
         if (states.includes(command)) {
-            // Toggle the format
             document.execCommand(command, false, null);
             updateToolbarState();
             handleInput();
             return;
         }
         
-        // Map custom format names to execCommand commands
         const commandMap = {
             'ul': 'insertUnorderedList',
             'ol': 'insertOrderedList',
@@ -1061,7 +1095,6 @@ const editbored = (function() {
             'h3': 'formatBlock'
         };
         
-        // Map value for formatBlock commands
         const valueMap = {
             'quote': 'blockquote',
             'codeblock': 'pre',
@@ -1070,47 +1103,38 @@ const editbored = (function() {
             'h3': 'h3'
         };
         
-        // Handle special cases
         if (command === 'link') {
             const url = prompt('Enter URL:', 'https://');
             if (url) {
                 document.execCommand('createLink', false, url);
             }
         } else if (command === 'image') {
-            // Image handling is done via modal, not execCommand
             const imageModal = document.getElementById('imageModal');
             if (imageModal) {
                 imageModal.style.display = 'flex';
             }
         } else if (command === 'code') {
-            // Inline code - toggle between wrapping selection or inserting placeholder
             const selection = window.getSelection();
             if (!selection.rangeCount) return;
             
             const range = selection.getRangeAt(0);
             const selectedText = range.toString();
             
-            // Check if selection is already inside a code element
             let codeElement = range.commonAncestorContainer;
-            // If it's a text node, start from its parent
             if (codeElement.nodeType === Node.TEXT_NODE) {
                 codeElement = codeElement.parentNode;
             }
             while (codeElement && codeElement.nodeType !== Node.DOCUMENT_NODE) {
                 if (codeElement.tagName === 'CODE') {
-                    // Check if it's a placeholder
                     if (codeElement.dataset.placeholder === 'true') {
-                        // Remove the placeholder
                         const parent = codeElement.parentNode;
                         parent.removeChild(codeElement);
-                        // Move cursor to where the placeholder was
                         const newRange = document.createRange();
                         newRange.setStart(parent, 0);
                         newRange.collapse(true);
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     } else if (codeElement.textContent === 'code' && codeElement.style.color === 'rgb(153, 153, 153)') {
-                        // Legacy placeholder without data attribute
                         const parent = codeElement.parentNode;
                         parent.removeChild(codeElement);
                         const newRange = document.createRange();
@@ -1119,7 +1143,6 @@ const editbored = (function() {
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     } else {
-                        // Unwrap the code element
                         const parent = codeElement.parentNode;
                         const text = codeElement.textContent;
                         const textNode = document.createTextNode(text);
@@ -1133,7 +1156,6 @@ const editbored = (function() {
             }
             
             if (selectedText) {
-                // Wrap selection in code tags
                 const codeEl = document.createElement('code');
                 codeEl.style.backgroundColor = '#f4f4f4';
                 codeEl.style.padding = '2px 4px';
@@ -1144,14 +1166,12 @@ const editbored = (function() {
                 range.deleteContents();
                 range.insertNode(codeEl);
                 
-                // Move cursor after the code element
                 const newRange = document.createRange();
                 newRange.setStartAfter(codeEl);
                 newRange.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(newRange);
             } else {
-                // Insert placeholder
                 const codeEl = document.createElement('code');
                 codeEl.textContent = 'code';
                 codeEl.dataset.placeholder = 'true';
@@ -1163,7 +1183,6 @@ const editbored = (function() {
                 
                 range.insertNode(codeEl);
                 
-                // Move cursor inside the code element
                 const newRange = document.createRange();
                 newRange.setStart(codeEl.firstChild, 0);
                 newRange.collapse(true);
@@ -1171,33 +1190,26 @@ const editbored = (function() {
                 selection.addRange(newRange);
             }
         } else if (command === 'codeblock') {
-            // Toggle code block or insert placeholder
             const selection = window.getSelection();
             if (!selection.rangeCount) return;
             
             const range = selection.getRangeAt(0);
             let currentBlock = range.commonAncestorContainer;
-            // If it's a text node, start from its parent
             if (currentBlock.nodeType === Node.TEXT_NODE) {
                 currentBlock = currentBlock.parentNode;
             }
             
-            // Find if we're already inside a pre element
             while (currentBlock && currentBlock.nodeType !== Node.DOCUMENT_NODE) {
                 if (currentBlock.tagName === 'PRE') {
-                    // Check if it's a placeholder
                     if (currentBlock.dataset.placeholder === 'true') {
-                        // Remove the placeholder
                         const parent = currentBlock.parentNode;
                         parent.removeChild(currentBlock);
-                        // Move cursor to where the placeholder was
                         const newRange = document.createRange();
                         newRange.setStart(parent, 0);
                         newRange.collapse(true);
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     } else if (currentBlock.textContent === 'code block') {
-                        // Legacy placeholder without data attribute - treat as placeholder
                         const parent = currentBlock.parentNode;
                         parent.removeChild(currentBlock);
                         const newRange = document.createRange();
@@ -1206,7 +1218,6 @@ const editbored = (function() {
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     } else {
-                        // We're in a real code block, convert back to paragraph
                         const parent = currentBlock.parentNode;
                         const text = currentBlock.textContent;
                         const p = document.createElement('p');
@@ -1223,7 +1234,6 @@ const editbored = (function() {
             const selectedText = range.toString();
             
             if (selectedText) {
-                // Wrap selection in pre > code
                 const preEl = document.createElement('pre');
                 preEl.style.backgroundColor = '#282c34';
                 preEl.style.color = '#abb2bf';
@@ -1244,14 +1254,12 @@ const editbored = (function() {
                 range.deleteContents();
                 range.insertNode(preEl);
                 
-                // Move cursor inside the pre
                 const newRange = document.createRange();
                 newRange.setStart(preEl, 0);
                 newRange.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(newRange);
             } else {
-                // Insert placeholder
                 const preEl = document.createElement('pre');
                 preEl.dataset.placeholder = 'true';
                 preEl.textContent = 'code block';
@@ -1264,7 +1272,6 @@ const editbored = (function() {
                 
                 range.insertNode(preEl);
                 
-                // Move cursor INSIDE the pre so clicking the button again detects it
                 const newRange = document.createRange();
                 newRange.setStart(preEl.firstChild, 0);
                 newRange.collapse(true);
@@ -1272,7 +1279,6 @@ const editbored = (function() {
                 selection.addRange(newRange);
             }
         } else {
-            // Use mapped command
             const execCmd = commandMap[command] || command;
             const execValue = valueMap[command] || value;
             document.execCommand(execCmd, false, execValue);
@@ -1289,10 +1295,8 @@ const editbored = (function() {
         
         const range = selection.getRangeAt(0);
         
-        // Delete selected content
         range.deleteContents();
         
-        // Create link
         const link = document.createElement('a');
         link.href = url;
         link.textContent = text || url;
@@ -1300,7 +1304,6 @@ const editbored = (function() {
         
         range.insertNode(link);
         
-        // Move cursor after link
         const newRange = document.createRange();
         newRange.setStartAfter(link);
         newRange.collapse(true);
@@ -1317,10 +1320,8 @@ const editbored = (function() {
         
         const range = selection.getRangeAt(0);
         
-        // Delete selected content (the '@' and partial name)
         range.deleteContents();
         
-        // Create mention span
         const mention = document.createElement('span');
         mention.className = 'mention';
         mention.textContent = '@' + name;
@@ -1328,7 +1329,6 @@ const editbored = (function() {
         
         range.insertNode(mention);
         
-        // Move cursor after mention
         const newRange = document.createRange();
         newRange.setStartAfter(mention);
         newRange.collapse(true);
@@ -1425,13 +1425,11 @@ window.handleImageUpload = function(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    // Check file type
     if (!file.type.startsWith('image/')) {
         window.showToast('Per favore seleziona un\' immagine');
         return;
     }
     
-    // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
         window.showToast('L\' immagine deve essere inferiore a 5MB');
         return;
@@ -1441,7 +1439,6 @@ window.handleImageUpload = function(event) {
     reader.onload = function(e) {
         const imageUrl = e.target.result;
         
-        // Insert image into editor
         const editor = document.getElementById('editor');
         const selection = window.getSelection();
         let range;
@@ -1455,7 +1452,6 @@ window.handleImageUpload = function(event) {
             selection.addRange(range);
         }
         
-        // Create image element
         const img = document.createElement('img');
         img.src = imageUrl;
         img.alt = file.name;
@@ -1464,16 +1460,13 @@ window.handleImageUpload = function(event) {
         img.style.display = 'block';
         img.style.margin = '10px 0';
         
-        // Insert at cursor or at end
         range.insertNode(img);
         
-        // Add a paragraph after the image if needed
         if (!img.nextSibling || img.nextSibling.nodeType !== Node.ELEMENT_NODE || img.nextSibling.tagName !== 'P') {
             const p = document.createElement('p');
             p.innerHTML = '<br>';
             img.parentNode.insertBefore(p, img.nextSibling);
             
-            // Move cursor to new paragraph
             range = document.createRange();
             range.setStart(p, 0);
             range.collapse(true);
@@ -1481,13 +1474,11 @@ window.handleImageUpload = function(event) {
             selection.addRange(range);
         }
         
-        // Trigger input event
         editor.dispatchEvent(new Event('input', { bubbles: true }));
         window.showToast('Immagine caricata');
     };
     reader.readAsDataURL(file);
     
-    // Reset input
     event.target.value = '';
 };
 
@@ -1500,7 +1491,6 @@ window.handleFileUpload = function(event) {
     reader.onload = function(e) {
         const fileUrl = e.target.result;
         
-        // Create link element
         const editor = document.getElementById('editor');
         const selection = window.getSelection();
         let range;
@@ -1514,7 +1504,6 @@ window.handleFileUpload = function(event) {
             selection.addRange(range);
         }
         
-        // Create link element
         const link = document.createElement('a');
         link.href = fileUrl;
         link.textContent = file.name;
@@ -1522,13 +1511,11 @@ window.handleFileUpload = function(event) {
         
         range.insertNode(link);
         
-        // Trigger input event
         editor.dispatchEvent(new Event('input', { bubbles: true }));
         window.showToast('File caricato');
     };
     reader.readAsDataURL(file);
     
-    // Reset input
     event.target.value = '';
 };
 
@@ -1562,20 +1549,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const format = this.getAttribute('data-format');
             
             if (format === 'mention') {
-                // Trigger mention popup
                 if (typeof window.mentionsSystem !== 'undefined') {
                     window.mentionsSystem.triggerMention();
                 }
             } else {
-                // Handle other formats
                 editbored.formatText(format);
             }
             
-            // Update active state
             document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
-            // Refocus editor
             const editorEl = document.getElementById('editor');
             if (editorEl) {
                 editorEl.focus();
@@ -1592,14 +1575,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const insertFromUrlBtn = document.getElementById('insertFromUrlBtn');
     const imageUrlInput = document.getElementById('imageUrlInput');
     
-    // Open file picker when clicking "upload from computer"
     if (uploadFromComputer && imageFileInput) {
         uploadFromComputer.addEventListener('click', function() {
             imageFileInput.click();
         });
     }
     
-    // Handle file selection
     let pendingImageData = null;
     if (imageFileInput) {
         imageFileInput.addEventListener('change', function(event) {
@@ -1611,7 +1592,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         data: e.target.result,
                         name: file.name
                     };
-                    // Show preview
                     const previewContainer = document.getElementById('imagePreview');
                     const previewImage = document.getElementById('previewImage');
                     if (previewContainer && previewImage) {
@@ -1622,12 +1602,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 reader.readAsDataURL(file);
             }
-            // Reset input
             event.target.value = '';
         });
     }
     
-    // Confirm image insertion
     const confirmImageBtn = document.getElementById('confirmImageBtn');
     if (confirmImageBtn) {
         confirmImageBtn.addEventListener('click', function() {
@@ -1640,7 +1618,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     handleInput();
                 }
             }
-            // Reset modal
             pendingImageData = null;
             if (imageModal) imageModal.style.display = 'none';
             const previewContainer = document.getElementById('imagePreview');
@@ -1650,7 +1627,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Cancel image selection
     const cancelImageBtn = document.getElementById('cancelImageBtn');
     if (cancelImageBtn) {
         cancelImageBtn.addEventListener('click', function() {
@@ -1662,7 +1638,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Close modal handlers
     if (modalCloseBtn && imageModal) {
         modalCloseBtn.addEventListener('click', function() {
             pendingImageData = null;
@@ -1685,7 +1660,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Close modal when clicking outside
     if (imageModal) {
         imageModal.addEventListener('click', function(event) {
             if (event.target === imageModal) {
@@ -1694,7 +1668,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Insert image from URL
     if (insertFromUrlBtn && imageUrlInput && imageModal) {
         insertFromUrlBtn.addEventListener('click', function() {
             const url = imageUrlInput.value.trim();
@@ -1708,29 +1681,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Status indicator and placeholder removal
     const editorEl = document.getElementById('editor');
     
-    // Use MutationObserver to detect changes and fix placeholders immediately
     const observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.type === 'characterData') {
                 const node = mutation.target;
                 
-                // Check if we're inside a code placeholder
                 if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
                     const parent = node.parentNode;
                     
                     if (parent.tagName === 'CODE' && parent.dataset.placeholder === 'true') {
                         const text = node.textContent;
                         if (text.startsWith('code') && text.length > 4) {
-                            // User typed before the placeholder text
                             const userText = text.substring(4);
                             parent.textContent = userText;
                             parent.removeAttribute('data-placeholder');
                             parent.style.color = '';
                             
-                            // Move cursor to end
                             const selection = window.getSelection();
                             if (selection) {
                                 const range = document.createRange();
@@ -1742,16 +1710,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    // Check if we're inside a pre placeholder
                     if (parent.tagName === 'PRE' && parent.dataset.placeholder === 'true') {
                         const text = node.textContent;
                         if (text.startsWith('code block') && text.length > 10) {
-                            // User typed before the placeholder text
                             const userText = text.substring(10);
                             parent.textContent = userText;
                             parent.removeAttribute('data-placeholder');
                             
-                            // Move cursor to end
                             const selection = window.getSelection();
                             if (selection) {
                                 const range = document.createRange();
@@ -1774,9 +1739,7 @@ document.addEventListener('DOMContentLoaded', function() {
         characterDataOldValue: true
     });
     
-    // Also handle keydown to intercept typing in placeholders
     editorEl.addEventListener('keydown', function(e) {
-        // Handle Enter key to exit inline code formatting
         if (e.key === 'Enter') {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
@@ -1784,18 +1747,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const range = selection.getRangeAt(0);
             let node = range.startContainer;
             
-            // Check if we're inside an inline code element
             if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
                 const parent = node.parentNode;
                 
                 if (parent.tagName === 'CODE') {
-                    // Exit inline code formatting on Enter
                     e.preventDefault();
                     
-                    // Get the text typed so far
                     const typedText = node.textContent;
                     
-                    // Create a paragraph with the text in inline code
                     const currentP = document.createElement('p');
                     const codeEl = document.createElement('code');
                     codeEl.style.backgroundColor = '#f4f4f4';
@@ -1805,11 +1764,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     codeEl.textContent = typedText;
                     currentP.appendChild(codeEl);
                     
-                    // Create a new paragraph for the next line
                     const newP = document.createElement('p');
                     newP.innerHTML = '<br>';
                     
-                    // Insert both paragraphs
                     if (parent.parentNode) {
                         parent.parentNode.insertBefore(currentP, parent);
                         if (parent.nextSibling) {
@@ -1819,10 +1776,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         parent.remove();
                         
-                        // Focus the new paragraph
                         newP.focus();
                         
-                        // Position cursor at start
                         const newRange = document.createRange();
                         newRange.setStart(newP, 0);
                         newRange.collapse(true);
@@ -1830,14 +1785,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         selection.addRange(newRange);
                     }
                     
-                    // Trigger input event
                     editorEl.dispatchEvent(new Event('input', { bubbles: true }));
                     return;
                 }
             }
         }
         
-        // Only handle regular character keys (not special keys like Enter, Tab, etc.)
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
@@ -1845,53 +1798,41 @@ document.addEventListener('DOMContentLoaded', function() {
             const range = selection.getRangeAt(0);
             let node = range.startContainer;
             
-            // Check if we're in a code placeholder
             if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
                 const parent = node.parentNode;
                 
                 if (parent.tagName === 'CODE' && parent.dataset.placeholder === 'true') {
-                    // Prevent default insertion
                     e.preventDefault();
                     
-                    // Clear placeholder and insert the typed character
                     parent.textContent = e.key;
                     parent.removeAttribute('data-placeholder');
                     parent.style.color = '';
                     
-                    // Get reference to the NEW text node that was created
                     const newNode = parent.firstChild;
                     
-                    // Position cursor at end
                     const newRange = document.createRange();
                     newRange.setStart(newNode, newNode.length);
                     newRange.collapse(true);
                     selection.removeAllRanges();
                     selection.addRange(newRange);
                     
-                    // Trigger input event
                     editorEl.dispatchEvent(new Event('input', { bubbles: true }));
                 }
                 
-                // Check if we're in a pre placeholder
                 if (parent.tagName === 'PRE' && parent.dataset.placeholder === 'true') {
-                    // Prevent default insertion
                     e.preventDefault();
                     
-                    // Clear placeholder and insert the typed character
                     parent.textContent = e.key;
                     parent.removeAttribute('data-placeholder');
                     
-                    // Get reference to the NEW text node that was created
                     const newNode = parent.firstChild;
                     
-                    // Position cursor at end
                     const newRange = document.createRange();
                     newRange.setStart(newNode, newNode.length);
                     newRange.collapse(true);
                     selection.removeAllRanges();
                     selection.addRange(newRange);
                     
-                    // Trigger input event
                     editorEl.dispatchEvent(new Event('input', { bubbles: true }));
                 }
             }
@@ -1912,7 +1853,6 @@ document.addEventListener('DOMContentLoaded', function() {
             statusDot.classList.add('unsaved');
         }
         
-        // Schedule auto-save
         setTimeout(() => {
             if (statusText) {
                 statusText.textContent = 'Salvato';
@@ -1925,23 +1865,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     });
     
-    // New document button handler
     const resetBtn = document.getElementById('resetBtn');
     if (resetBtn) {
         resetBtn.addEventListener('click', function(e) {
             e.preventDefault();
             if (confirm('Are you sure you want to create a new document? All current content will be lost.')) {
-                // Clear editor content
                 const editor = document.getElementById('editor');
                 if (editor) {
                     editor.innerHTML = '';
                 }
-                // Clear markdown textarea if in markdown mode
                 const sourceCodeArea = document.getElementById('sourceCodeDisplay');
                 if (sourceCodeArea) {
                     sourceCodeArea.value = '';
                 }
-                // If in markdown mode, switch back to rich text
                 if (typeof markdownMode !== 'undefined' && markdownMode) {
                     markdownMode = false;
                     if (toolbar) toolbar.style.display = '';
@@ -1951,7 +1887,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (markdownToolbar) markdownToolbar.style.display = 'none';
                     if (markdownToggle) markdownToggle.classList.remove('active');
                 }
-                // Clear localStorage
                 localStorage.removeItem('editbored_content');
                 localStorage.removeItem('editbored_title');
                 window.showToast('Documento ripristinato');
@@ -1959,20 +1894,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Markdown toggle button handler
     const markdownToggle = document.getElementById('markdownToggle');
     const toolbar = document.getElementById('toolbar');
     const header = document.querySelector('header');
     const sourceCodeArea = document.getElementById('sourceCodeDisplay');
     let markdownMode = false;
     
-    // Initialize Turndown service for HTML to Markdown conversion
     const turndownService = new TurndownService({
         headingStyle: 'atx',
         codeBlockStyle: 'fenced'
     });
     
-    // Back to Rich Text button handler
     const backToRichTextBtn = document.getElementById('backToRichText');
     
     if (markdownToggle) {
@@ -1980,47 +1912,40 @@ document.addEventListener('DOMContentLoaded', function() {
             markdownMode = !markdownMode;
             
             if (markdownMode) {
-                // Switch to markdown mode
-                // Hide toolbar and editor, show source code textarea
                 if (toolbar) toolbar.style.display = 'none';
                 editorEl.style.display = 'none';
                 
-                // Convert HTML content to Markdown using Turndown
                 const editorContent = editorEl.innerHTML;
                 const markdownContent = turndownService.turndown(editorContent);
                 
-                // Show and populate the source code textarea
                 if (sourceCodeArea) {
                     sourceCodeArea.value = markdownContent;
                     sourceCodeArea.style.display = 'block';
                 }
                 
-                // Show the markdown toolbar with back button
+                const markdownToolbar = document.getElementById('markdownToolbar');
                 if (markdownToolbar) {
                     markdownToolbar.style.display = 'flex';
                 }
                 
                 markdownToggle.classList.add('active');
             } else {
-                // Switch back to rich text mode
                 if (toolbar) toolbar.style.display = '';
                 editorEl.style.display = 'block';
                 
-                // Hide source code area and markdown toolbar
                 if (sourceCodeArea) {
                     sourceCodeArea.style.display = 'none';
                 }
+                const markdownToolbar = document.getElementById('markdownToolbar');
                 if (markdownToolbar) {
                     markdownToolbar.style.display = 'none';
                 }
                 
-                // Convert Markdown back to HTML using marked
                 if (sourceCodeArea) {
                     const markdownContent = sourceCodeArea.value;
                     const htmlContent = marked.parse(markdownContent);
                     editorEl.innerHTML = htmlContent;
                     
-                    // Trigger input event to update any listeners and save functionality
                     editorEl.dispatchEvent(new Event('input', { bubbles: true }));
                 }
                 
@@ -2029,34 +1954,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle back to rich text button click
     if (backToRichTextBtn) {
         backToRichTextBtn.addEventListener('click', function() {
             markdownMode = false;
             
-            // Switch back to rich text mode
             if (toolbar) toolbar.style.display = '';
             editorEl.style.display = 'block';
             
-            // Hide source code area and markdown toolbar
             if (sourceCodeArea) {
                 sourceCodeArea.style.display = 'none';
             }
+            const markdownToolbar = document.getElementById('markdownToolbar');
             if (markdownToolbar) {
                 markdownToolbar.style.display = 'none';
             }
             
-            // Convert Markdown back to HTML using marked
             if (sourceCodeArea) {
                 const markdownContent = sourceCodeArea.value;
                 const htmlContent = marked.parse(markdownContent);
                 editorEl.innerHTML = htmlContent;
                 
-                // Trigger input event to update any listeners and save functionality
                 editorEl.dispatchEvent(new Event('input', { bubbles: true }));
             }
             
-            // Update toggle button state
             if (markdownToggle) {
                 markdownToggle.classList.remove('active');
             }
