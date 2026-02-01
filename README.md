@@ -213,7 +213,7 @@ Each link preview has a remove button (X) in the top-right corner. Click it to d
 
 MIT License
 
-Copyright (c) 2026 bulletinbored team 
+Copyright (c) 2026 mlzog 
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
